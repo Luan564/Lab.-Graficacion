@@ -68,32 +68,25 @@ public:
 	// [2]	regresar distancia si hay intersección
 	// [3]	regresar 0.0 si no hay interseccion
 	double intersect(const Ray &ray) const {
-		Vector a = 0;
-		double discriminante = 0, b = 0, c = 0, d = 0, tMas = 0, tMenos = 0;
+		double discriminante = 0;
 
-		a = (ray.o.operator-(p));				//vector	(o-p)
-		b = a.dot(ray.d);						//double	d.(o-p)
-		c = b*b;								//double	((o-p).d)²
-		d = a.dot(a);							//double	(o-p).(o-p)
-		discriminante = c - d + (r*r);
+		Vector aux = ray.o.operator-(p);					//Vector    (o-p)
+		double a = ray.d.dot(ray.d);						//double	(d.d)
+		double b = 2.0*(aux.dot(ray.d));					//double	2*[(o-p).d]
+		double c = aux.dot(aux) - (r*r); 					//double	(o-p).(o-p)-r²
+		discriminante = (b*b)-4.0*(a*c);
 
-		
-		if(discriminante > 300){				//Si el discriminate es positivo pero muy grande lo ignoraremos
+		if(discriminante < 0){
 			return 0.0;
 		}
-
-		if(discriminante > 0){					//[1]
-			tMas = -b+sqrt(discriminante);
-			tMenos = -b-sqrt(discriminante);
-			if(tMas < tMenos){					//[2]
-				return tMas;
-			}
-			else{
-				return tMenos;
-			}
-		}
 		else{
-			return 0.0;							//[3]
+			double t = (-b - sqrt(discriminante)) / (2.0 * a);
+        	if(t > 0) {
+            	return t;
+        	}
+			else{
+            	return 0; 
+        	}
 		}
 	}
 };
@@ -130,14 +123,21 @@ inline int toDisplayValue(const double x) {
 // [3]	almacenar en t la distancia sobre el rayo en que sucede la interseccion
 // [4]	almacenar en id el indice de spheres[] de la esfera cuya interseccion es mas cercana
 inline bool intersect(const Ray &r, double &t, int &id) {
-	for(int i = 0; i <= 8; i++){		//[1]
-		t = spheres[i].intersect(r);	//[3]
-		if(t){							//Si t contiene algo distinto de 0.0 entra al if
-			id = i;						//[4]
-			return true;				//[2]
-		}
-	}
-	return false;						//[2]
+	bool interseccion = false;
+    double cercana = std::numeric_limits<double>::max(); 	//Numero maximo para un double 
+
+    for (int i = 0; i <= 8; ++i) {
+        double actual = spheres[i].intersect(r); 
+
+        // verifica si la interseccion es valida y mas cercana que la ultima interseccion
+        if(actual > 0 && actual < cercana){
+            cercana = actual; 
+            id = i; 
+            interseccion = true; 
+        }
+    }
+    t = cercana; 
+    return interseccion; 
 }
 
 // Calcula el valor de color para el rayo dado
@@ -156,6 +156,7 @@ Color shade(const Ray &r) {
 	x = r.o + r.d.mult(t);		// Origen del rayo + (t * direccion)
 
 	// determinar la dirección normal en el punto de interseccion
+
 	Vector n;		//Definiremos el vector desde el centro de la esfera hasta el punto de intersección calculado
 	n = x.operator-(spheres[id].p);		//n = Punto De Intersección - Origen de la Esfera
 	n.normalize();						//Normalizamos "n" con su función ya definida
