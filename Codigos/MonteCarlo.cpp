@@ -29,7 +29,6 @@ public:
     }
 
     double calcularM() {
-        // El valor máximo de la función en el intervalo [a, b]. En este caso, f(x) = x^5 alcanza su máximo en x = 3
         return f(b);
     }
 
