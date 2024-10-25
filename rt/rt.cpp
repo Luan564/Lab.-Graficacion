@@ -26,7 +26,7 @@ public:
 	}
   
 	// operator % para producto cruz
-	Vector operator%(Vector&b){
+	Vector operator%(const Vector &b){
 		return Vector(y * b.z - z * b.y, z * b.x - x * b.z, x * b.y - y * b.x);
 	}
 	
@@ -60,8 +60,9 @@ public:
 	double r;	// radio de la esfera
 	Point p;	// posicion
 	Color c;	// color  
+	Color emLuz;	//Si emite o no Luz
 
-	Sphere(double r_, Point p_, Color c_): r(r_), p(p_), c(c_) {}
+	Sphere(double r_, Point p_, Color c_, Color L_): r(r_), p(p_), c(c_), emLuz(L_) {}
   
 	// PROYECTO 1
 	// [1]	determina si el rayo intersecta a esta esfera
@@ -92,15 +93,15 @@ public:
 };
 
 Sphere spheres[] = {
-	//Escena: radio, posicion, color 
-	Sphere(1e5,  Point(-1e5 - 49, 0, 0),   Color(.75, .25, .25)), // pared izq
-	Sphere(1e5,  Point(1e5 + 49, 0, 0),    Color(.25, .25, .75)), // pared der
-	Sphere(1e5,  Point(0, 0, -1e5 - 81.6), Color(.75, .75, .75)), // pared detras
-	Sphere(1e5,  Point(0, -1e5 - 40.8, 0), Color(.75, .75, .75)), // suelo
-	Sphere(1e5,  Point(0, 1e5 + 40.8, 0),  Color(.75, .75, .75)), // techo
-	Sphere(16.5, Point(-23, -24.3, -34.6), Color(.999, .999, .999)), // esfera abajo-izq
-	Sphere(16.5, Point(23, -24.3, -3.6),   Color(.999, .999, .999) ), // esfera abajo-der
-	Sphere(10.5, Point(0, 24.3, 0),        Color(1, 1, 1)) // esfera arriba
+	// Escena: radio, posicion, color, radiancia
+	Sphere(1e5, Point(-1e5 - 49, 0, 0), Color(.75, .25, .25), Color()),	  // pared izq
+	Sphere(1e5, Point(1e5 + 49, 0, 0), Color(.25, .25, .75), Color()),	  // pared der
+	Sphere(1e5, Point(0, 0, -1e5 - 81.6), Color(.25, .75, .25), Color()), // pared detras
+	Sphere(1e5, Point(0, -1e5 - 40.8, 0), Color(.25, .75, .75), Color()), // suelo
+	Sphere(1e5, Point(0, 1e5 + 40.8, 0), Color(.75, .75, .25), Color()),  // techo
+	Sphere(16.5, Point(-23, -24.3, -34.6), Color(.2, .3, .4), Color()),	  // esfera abajo-izq
+	Sphere(16.5, Point(23, -24.3, -3.6), Color(.4, .3, .2), Color()),	  // esfera abajo-der
+	Sphere(10.5, Point(0, 24.3, 0), Color(1, 1, 1), Color(10, 10, 10))	  // esfera arriba
 };
 
 // limita el valor de x a [0,1]
@@ -140,6 +141,40 @@ inline bool intersect(const Ray &r, double &t, int &id) {
     return interseccion; 
 }
 
+void coordinateSystem(const Vector &n, Vector &s, Vector &t){
+	float invLen = 0.0f;
+	if (std::abs(n.x) > std::abs(n.y)){
+		invLen = 1.0f / std::sqrt(n.x * n.x + n.z * n.z);
+		t = Vector(n.z * invLen, 0.0f, -n.x * invLen);
+	}
+	else{
+		invLen = 1.0f / std::sqrt(n.y * n.y + n.z * n.z);
+		t = Vector(0.0f, n.z * invLen, -n.y * invLen);
+	}
+	s = t.operator%(n);
+
+}
+
+Vector localesToGlobales(const Vector &n, Vector &s, Vector &t, Vector &local){
+	Vector global{ 
+		(s.x * local.x + t.x * local.y + n.x * local.z), 
+		(s.y * local.x + t.y * local.y + n.y * local.z),
+		(s.z * local.x + t.z * local.y + n.z * local.z)
+	};
+
+	return global;
+}
+
+Vector globalesToLocales(const Vector &n, Vector &s, Vector &t, Vector &global){
+	Vector local{
+		(s.x * global.x + s.y * global.y + s.z * global.z), 
+		(t.x * global.x + t.y * global.y + t.z * global.z),
+		(n.z * global.x + n.z * global.y + n.z * global.z)
+	};
+
+	return local;
+}
+
 // Calcula el valor de color para el rayo dado
 Color shade(const Ray &r) {
 	double t;
@@ -169,8 +204,94 @@ Color shade(const Ray &r) {
 	
 }
 
+class MonteCarlo {
+	public:        
+		Ray ray;
+		Point x;
+		Vector n; 
+	
+		// Constructor del vector, parametros por default en cero
+		MonteCarlo(Ray ray_, Point x_, Vector n_) : ray(ray_), x(x_), n(n_)
+		{
+		}
+
+	// public:
+	// 	Color cosenoHemisferico(Sphere sphere){
+	// 		double thetaj = acos(std::sqrt(1 - GETNEXTRAND()));
+	// 		double phiHemisj = (2 * M_PI * GETNEXTRAND());
+
+	// 		double pwj = (1 / (M_PI * cos(thetaj)));
+
+	// 		//Vector
+	// 		Vector wi(
+	// 			(cos(phiHemisj) * sin(thetaj)),
+	// 			(sin(thetaj) * sin(phiHemisj)),
+	// 			cos(thetaj));
+	// 	}
+};
+
+Color muestreoHemisferio(const Ray &r, int muestreos){
+	double t;
+	int id = 0;
+
+	if (!intersect(r, t, id)) return Color(); 
+	
+	const Sphere &obj = spheres[id];
+
+	if (id == 7) {
+		return obj.emLuz; 
+	}
+
+	Point x = r.o + r.d * t;
+	Vector n = (x - obj.p).normalize(); 
+
+	// Genera un sistema de coordenadas locales
+	Vector s, tVec;
+	coordinateSystem(n, s, tVec);
+
+	Color color_acumulado = Color();
+	
+	for (int i = 0; i < muestreos; i++) {
+
+		double r1 = rand() / (double)RAND_MAX;
+		double r2 = rand() / (double)RAND_MAX;
+
+		// Calcula los ángulos theta y phi para el muestreo hemisférico
+		double theta = acos(sqrt(r1));
+		double phi = 2 * M_PI * r2; 
+
+		// Calcula la dirección del muestreo en el sistema de coordenadas local
+		Vector direc = s * (sin(theta) * cos(phi)) + tVec * (sin(theta) * sin(phi)) + n * cos(theta);
+
+		double t2;
+		int id2 = 0;
+
+		if (!intersect(Ray(x, direc), t2, id2)) continue; 
+
+		const Sphere &obj2 = spheres[id2];
+
+		// Radiancia de la esfera intersectada
+		Color radiancia = obj2.emLuz;
+
+		// BRDF difusa
+		Color brdf = obj.c * (1 / M_PI);
+
+		// Coseno del ángulo entre la normal y la dirección del muestreo
+		double coseno = n.dot(direc);
+
+		color_acumulado = color_acumulado + radiancia.mult(brdf) * coseno;
+	}
+
+	return color_acumulado * (1.0 / muestreos);
+}
+
+Color shadeH(const Ray &r, int muestreos){
+	return muestreoHemisferio(r, muestreos);
+}
 
 int main(int argc, char *argv[]) {
+	
+	int muestreos = 100;
 	int w = 1024, h = 768; // image resolution
   
 	// fija la posicion de la camara y la dirección en que mira
@@ -185,7 +306,7 @@ int main(int argc, char *argv[]) {
 
 	// PROYECTO 1
 	// usar openmp para paralelizar el ciclo: cada hilo computara un renglon (ciclo interior),
-	// #pragma omp parallel for
+	#pragma omp parallel for
 	for(int y = 0; y < h; y++) { 
 		// recorre todos los pixeles de la imagen
 		fprintf(stderr,"\r%5.2f%%",100.*y/(h-1));
@@ -196,7 +317,7 @@ int main(int argc, char *argv[]) {
 			Vector cameraRayDir = cx * ( double(x)/w - .5) + cy * ( double(y)/h - .5) + camera.d;
 			
 			// computar el color del pixel para el punto que intersectó el rayo desde la camara
-			pixelValue = shade( Ray(camera.o, cameraRayDir.normalize()) );
+			pixelValue = shadeH( Ray(camera.o, cameraRayDir.normalize()), muestreos );
 
 			// limitar los tres valores de color del pixel a [0,1]
 			pixelColors[idx] = Color(clamp(pixelValue.x), clamp(pixelValue.y), clamp(pixelValue.z));
@@ -207,7 +328,7 @@ int main(int argc, char *argv[]) {
 
 	// PROYECTO 1
 	// Investigar formato ppm
-	FILE *f = fopen("image.ppm", "w");
+	FILE *f = fopen("Prueba1.ppm", "w");
 	// escribe cabecera del archivo ppm, ancho, alto y valor maximo de color
 	fprintf(f, "P3\n%d %d\n%d\n", w, h, 255); 
 	for (int p = 0; p < w * h; p++) 
