@@ -1,0 +1,11 @@
+Uniforme32 ->  34.939807 segundos (time.h) -> 19.51 segundos (cronometro)
+Uniforme100 -> 109.119308 segundos (time.h) -> 60.94 segundos (cronometro)
+Uniforme1000 -> 1124.301607 segundos (time.h) -> 627.90 segundos (cronometro)
+
+Hemisférico32 -> 33.392127 segundos (time.h) -> 18.64 segundos (cronometro)
+Hemisférico100 -> 105.870523 segundos (time.h) -> 59.1274 segundos (cronometro)
+Hemisférico1000 -> 1113.006461 segundos (time.h) -> 621.60 segundos (cronometro)
+
+Coseno32 -> 33.716038 segundos (time.h) -> 18.83 segundos (cronometro)
+Coseno100 -> 107.517012 segundos (time.h) -> 60.04 segundos (cronometro)
+Coseno1000 -> 1118.833277 segundos (time.h) -> 624.85 segundos (cronometro)
