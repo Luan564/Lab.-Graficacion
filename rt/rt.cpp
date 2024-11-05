@@ -142,20 +142,6 @@ inline bool intersect(const Ray &r, double &t, int &id) {
     return interseccion; 
 }
 
-void coordinateSystem(const Vector &n, Vector &s, Vector &t){
-	float invLen = 0.0f;
-	if (std::abs(n.x) > std::abs(n.y)){
-		invLen = 1.0f / std::sqrt(n.x * n.x + n.z * n.z);
-		t = Vector(n.z * invLen, 0.0f, -n.x * invLen);
-	}
-	else{
-		invLen = 1.0f / std::sqrt(n.y * n.y + n.z * n.z);
-		t = Vector(0.0f, n.z * invLen, -n.y * invLen);
-	}
-	s = t.operator%(n);
-
-}
-
 Vector localesToGlobales(const Vector &n, Vector &s, Vector &t, Vector &local){
 	Vector global{ 
 		(s.x * local.x + t.x * local.y + n.x * local.z), 
@@ -437,8 +423,6 @@ Color shadeC(const Ray &r, int muestreos){
 	return monteCarloCosenoHemisferico(r, muestreos);
 }
 
-
-
 int main(int argc, char *argv[]) {
 	clock_t inicio; 
 	int op = 0;
@@ -567,7 +551,7 @@ int main(int argc, char *argv[]) {
 
 	// PROYECTO 1
 	// Investigar formato ppm
-	FILE *f = fopen("Coseno1000.ppm", "w");
+	FILE *f = fopen("image3.ppm", "w");
 	// escribe cabecera del archivo ppm, ancho, alto y valor maximo de color
 	fprintf(f, "P3\n%d %d\n%d\n", w, h, 255); 
 	for (int p = 0; p < w * h; p++) 
