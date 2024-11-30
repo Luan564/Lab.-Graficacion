@@ -199,227 +199,78 @@ Color shade(const Ray &r) {
 	
 }
 
-Color monteCarloUniformeEsferico(const Ray &r, int muestreos)
-{
-	double t;
+
+class FuenteArea {
+public:
+    Point centro;    // Centro de la fuente
+    Vector u, v;     // Vectores para definir el área (dimensiones y orientación, solo si es necesario)
+    Color emLuz;     // Radiancia emitida por la fuente
+    double radio;    // Radio del disco
+
+    FuenteArea(Point c_, double radio_, Color L_) 
+        : centro(c_), radio(radio_), emLuz(L_) {}
+
+    // Genera un punto aleatorio dentro del disco
+    Point randomPoint() const {
+        // Genera un ángulo aleatorio en [0, 2*pi]
+        double angulo = 2 * M_PI * (rand() / (double)RAND_MAX);
+        
+        // Genera una distancia aleatoria dentro del radio (rango [0, radio])
+        double distancia = sqrt(rand() / (double)RAND_MAX) * radio; 
+
+        // Coordenadas polares a cartesianas para el punto en el disco
+        double x = centro.x + distancia * cos(angulo);
+        double z = centro.z + distancia * sin(angulo);
+
+        // El disco está alineado con el plano XZ, por lo que la coordenada Y permanece constante
+        return Point(x, centro.y, z);
+    }
+};
+
+// Instancia de fuente de área en lugar de la esfera luminosa (ahora un disco)
+FuenteArea fuenteLuminosa(
+    Point(0, 23.4, -10),    // Centro del disco
+    15.0,                 // Radio del disco
+    Color(10, 10, 10)     // Radiancia
+);
+
+Color monteCarloArea(const Ray &r, int muestreos) {
+    double t;
     int id = 0;
-    // Color colorValue;   //Color del pixel actual, falta ve como la fuente modifica ese color
-	Color colorValue;
-	Color radiancia;
-    // determinar que esfera (id) y a que distancia (t) el rayo intersecta
-    if (!intersect(r, t, id))
-        return Color();	// el rayo no intersecto objeto, return Vector() == negro
-	const Sphere &obj = spheres[id];
-	if(id == 7)
-	{
-		return obj.emLuz;
-	}
-	Point x = r.o + (r.d * t);  //primer punto intersección 
-	Vector n =  (x - obj.p).normalize();    //Vector normal a la superficie
+    Color radiancia;
 
-	//BRDF
-	Vector brdf = obj.c * (1.0/ M_PI);
+    // Intersección del rayo con la escena
+    if (!intersect(r, t, id)) return Color(); // No hay intersección
+    if (id == 7) return spheres[id].emLuz; // Fuente de luz visible
 
-	//Se lanza un segundo rayo desde el punto de intersección ¿Con qué dirección?
+    const Sphere &obj = spheres[id];
+    Point x = r.o + (r.d * t); // Punto de intersección
+    Vector n = (x - obj.p).normalize(); // Normal en el punto de intersección
 
-	//muestreo uniforme esférico 
+    // BRDF simplificada
+    Vector brdf = obj.c * (1.0 / M_PI);
 
-	for(int z = 0; z < muestreos; z++)
-	{
-		double r1 = rand() / (double)RAND_MAX;   //Aleatorio entre 0.0 y 1.0
-		double r2 = rand() / (double)RAND_MAX;
+    for (int i = 0; i < muestreos; i++) {
+        Point lightPoint = fuenteLuminosa.randomPoint(); // Punto aleatorio en el disco
+        Vector dir_to_light = (lightPoint - x).normalize();
 
-		double theta = acos(1 - (2 * r1));
-		double phi = 2 * M_PI * r2;
+        double cos_theta = n.dot(dir_to_light);
+        if (cos_theta <= 0) continue; // Ignorar si está en dirección opuesta
 
-		//Conversión esféricas-cartesianas para la dirección muestreada
-		Vector dir_local(sin(theta)*cos(phi) , sin(theta)*sin(phi), cos(theta) );
-		dir_local = dir_local.normalize();
+        Ray shadowRay(x, dir_to_light);
+        double t2;
+        int id2;
 
-		//Marco de referencia local a partir del vector n
-		float invLen = 1.0f / sqrt(n.x * n.x + n.z * n.z);
-		Vector te = Vector(n.z * invLen, 0.0f, -n.x * invLen);
-		Vector s = te % n;
+        // Verificar si el rayo alcanza la fuente sin obstrucciones
+        if (!intersect(shadowRay, t2, id2) || id2 == 7) { // Asegurarse de que los rayos lleguen correctamente
+            radiancia = radiancia + (fuenteLuminosa.emLuz.mult(brdf) * cos_theta);
+        }
+    }
 
-
-		Vector dir_global;
-		dir_global = localesToGlobales(n, s, te, dir_local);
-		dir_global = dir_global.normalize();
-
-		//Coseno theta
-		double cos_theta = n.dot(dir_global);
-		
-		//Probabilidad
-		double prob = 1.0 / (4 * M_PI); 
-
-		//Rayo con origen fijo y dirección muestreada para calcular la segundo intersección
-		Ray ray2(x, dir_global);
-
-		//Se calcula la segunda intersección
-		int id2 = 0;
-		double t2;
-		intersect(ray2, t2, id2);
-		const Sphere obj2 = spheres[id2];   //Segunda esfera con la que intercepta
-		if(id2 == 7)    //Conecta con la fuente
-		{
-			Vector emision = obj2.emLuz;
-			radiancia = radiancia + ( ((emision.mult(brdf)) * cos_theta) * (1.0 / prob) );
-		}
-		if(z == muestreos-1)
-		{
-			colorValue = radiancia * (1.0/muestreos);
-		}
-	}
-	return colorValue;
+    // Normalización de la radiancia acumulada con un factor de atenuación
+    return radiancia * (1.0 / muestreos) * 0.1; 
 }
-
-Color monteCarloHemisferico(const Ray &r, int muestreos)
-{
-	double t;
-    int id = 0;
-    // Color colorValue;   //Color del pixel actual, falta ve como la fuente modifica ese color
-	Color colorValue;
-	Color radiancia;
-    // determinar que esfera (id) y a que distancia (t) el rayo intersecta
-    if (!intersect(r, t, id))
-        return Color();	// el rayo no intersecto objeto, return Vector() == negro
-	const Sphere &obj = spheres[id];
-	if(id == 7)
-	{
-		return obj.emLuz;
-	}
-	Point x = r.o + (r.d * t);  //primer punto intersección 
-	Vector n =  (x - obj.p).normalize();    //Vector normal a la superficie
-
-	//BRDF
-	Vector brdf = obj.c * (1.0/ M_PI);
-
-	//Se lanza un segundo rayo desde el punto de intersección ¿Con qué dirección?
-
-	//muestreo uniforme esférico 
-
-	for(int z = 0; z < muestreos; z++)
-	{
-		double r1 = rand() / (double)RAND_MAX;   //Aleatorio entre 0.0 y 1.0
-		double r2 = rand() / (double)RAND_MAX;
-		
-		double theta = acos(sqrt(r1));
-		double phi = 2 * M_PI * r2;
-
-		//Conversión esféricas-cartesianas para la dirección muestreada
-		Vector dir_local(sin(theta)*cos(phi) , sin(theta)*sin(phi), cos(theta) );
-		dir_local = dir_local.normalize();
-
-		//Marco de referencia local a partir del vector n
-		float invLen = 1.0f / sqrt(n.x * n.x + n.z * n.z);
-		Vector te = Vector(n.z * invLen, 0.0f, -n.x * invLen);
-		Vector s = te % n;
-
-
-		Vector dir_global;
-		dir_global = localesToGlobales(n, s, te, dir_local);
-		dir_global = dir_global.normalize();
-
-		//Coseno theta
-		double cos_theta = n.dot(dir_global);
-		
-		//Rayo con origen fijo y dirección muestreada para calcular la segundo intersección
-		Ray ray2(x, dir_global);
-
-		//Se calcula la segunda intersección
-		int id2 = 0;
-		double t2;
-		intersect(ray2, t2, id2);
-		const Sphere obj2 = spheres[id2];   //Segunda esfera con la que intercepta
-		if(id2 == 7)    //Conecta con la fuente
-		{
-			Vector emision = obj2.emLuz;
-			radiancia = radiancia + ( ((emision.mult(brdf)) * cos_theta));
-		}
-		if(z == muestreos-1)
-		{
-			colorValue = radiancia * (1.0/muestreos);
-		}
-	}
-	return colorValue;
-}
-
-Color monteCarloCosenoHemisferico(const Ray &r, int muestreos)
-{
-	double t;
-    int id = 0;
-    // Color colorValue;   //Color del pixel actual, falta ve como la fuente modifica ese color
-	Color colorValue;
-	Color radiancia;
-    // determinar que esfera (id) y a que distancia (t) el rayo intersecta
-    if (!intersect(r, t, id))
-        return Color();	// el rayo no intersecto objeto, return Vector() == negro
-	const Sphere &obj = spheres[id];
-	if(id == 7)
-	{
-		return obj.emLuz;
-	}
-	Point x = r.o + (r.d * t);  //primer punto intersección 
-	Vector n =  (x - obj.p).normalize();    //Vector normal a la superficie
-
-	//BRDF
-	Vector brdf = obj.c * (1.0/ M_PI);
-
-	//Se lanza un segundo rayo desde el punto de intersección ¿Con qué dirección?
-
-	//muestreo uniforme esférico 
-
-	for(int z = 0; z < muestreos; z++)
-	{
-		double r1 = rand() / (double)RAND_MAX;   //Aleatorio entre 0.0 y 1.0
-		double r2 = rand() / (double)RAND_MAX;
-		
-		double theta = acos(r1);
-		double phi = 2 * M_PI * r2;
-
-		//Conversión esféricas-cartesianas para la dirección muestreada
-		Vector dir_local(sin(theta)*cos(phi) , sin(theta)*sin(phi), cos(theta) );
-		dir_local = dir_local.normalize();
-
-		//Marco de referencia local a partir del vector n
-		float invLen = 1.0f / sqrt(n.x * n.x + n.z * n.z);
-		Vector te = Vector(n.z * invLen, 0.0f, -n.x * invLen);
-		Vector s = te % n;
-
-
-		Vector dir_global;
-		dir_global = localesToGlobales(n, s, te, dir_local);
-		dir_global = dir_global.normalize();
-
-		//Coseno theta
-		double cos_theta = n.dot(dir_global);
-		
-		//Probabilidad
-		double prob = cos_theta / M_PI; 
-
-		//Rayo con origen fijo y dirección muestreada para calcular la segundo intersección
-		Ray ray2(x, dir_global);
-
-		//Se calcula la segunda intersección
-		int id2 = 0;
-		double t2;
-		intersect(ray2, t2, id2);
-		const Sphere obj2 = spheres[id2];   //Segunda esfera con la que intercepta
-		if(id2 == 7)    //Conecta con la fuente
-		{
-			Vector emision = obj2.emLuz;
-			radiancia = radiancia + ( ((emision.mult(brdf)) * cos_theta) * (1.0 / prob));
-		}
-		if(z == muestreos-1)
-		{
-			colorValue = radiancia * (1.0/muestreos);
-		}
-	}
-	return colorValue;
-}
-
-
-/*MODIFICACIONEEEEEEEEEEEEEEEEEEEEEEEES INICIO*/ 
+ 
 
 // Define una fuente de ángulo sólido
 class FuenteAnguloSolido {
@@ -530,25 +381,6 @@ Color monteCarloAnguloSolido(const Ray &r, int muestreos, double theta_max) {
     return colorValue;
 }
 
-
-
-
-
-
-/*MODIFICACIONEEEEEEEEEEEEEEEEEEEEEEEES FIN*/ 
-
-Color shadeU(const Ray &r, int muestreos){
-	return monteCarloUniformeEsferico(r, muestreos);
-}
-
-Color shadeH(const Ray &r, int muestreos){
-	return monteCarloHemisferico(r, muestreos);
-}
-
-Color shadeC(const Ray &r, int muestreos){
-	return monteCarloCosenoHemisferico(r, muestreos);
-}
-
 int main(int argc, char *argv[]) {
 	clock_t inicio; 
 	int op = 0;
@@ -566,15 +398,13 @@ int main(int argc, char *argv[]) {
 	Color *pixelColors = new Color[w * h];
 
 		printf("------ Menú -----\n");
-		printf("1.- Muestreo uniforme esférico\n");
-		printf("2.- Muestreo uniforme hemisférico\n");
-		printf("3.- Muestreo coseno hemisférico\n");
-		printf("4.- Muestreo con fuente de área\n");
-		printf("5.- Salir\n");
+		printf("1.- Muestreo con fuente de área\n");
+        printf("2.- Muestreo Angulo Solido\n");
+		printf("3.- Salir\n");
 		printf("Seleccione una opción: ");
 		scanf("%d", &op);
 
-		if (op == 5) {
+		if (op == 3) {
 			return 0; 
 		}
 
@@ -588,72 +418,18 @@ int main(int argc, char *argv[]) {
 
 		switch (op){
 		case 1:{
-			// Obtener el tiempo de inicio
-    		clock_t inicio = clock();
 			#pragma omp parallel for
-			for(int y = 0; y < h; y++) { 
-				// recorre todos los pixeles de la imagen
-				fprintf(stderr,"\r%5.2f%%",100.*y/(h-1));
-				for(int x = 0; x < w; x++ ) {
-					int idx = (h - y - 1) * w + x; // index en 1D para una imagen 2D x,y son invertidos
-					Color pixelValue = Color(); // pixelValue en negro por ahora
-					// para el pixel actual, computar la dirección que un rayo debe tener
-					Vector cameraRayDir = cx * ( double(x)/w - .5) + cy * ( double(y)/h - .5) + camera.d;
-					
-					// computar el color del pixel para el punto que intersectó el rayo desde la camara
-					pixelValue = shadeU( Ray(camera.o, cameraRayDir.normalize()), muestreos );
-
-					// limitar los tres valores de color del pixel a [0,1]
-					pixelColors[idx] = Color(clamp(pixelValue.x), clamp(pixelValue.y), clamp(pixelValue.z));
-				}
-			}
+            for (int y = 0; y < h; y++) { 
+                fprintf(stderr, "\r%5.2f%%", 100. * y / (h - 1));
+                for (int x = 0; x < w; x++) {
+                    int idx = (h - y - 1) * w + x;
+                    Vector cameraRayDir = cx * (double(x) / w - .5) + cy * (double(y) / h - .5) + camera.d;
+                    pixelColors[idx] = monteCarloArea(Ray(camera.o, cameraRayDir.normalize()), muestreos);
+                }
+            }
 		}break;
 
-		case 2:{
-			// Obtener el tiempo de inicio
-    		clock_t inicio = clock();
-			#pragma omp parallel for
-			for(int y = 0; y < h; y++) { 
-				// recorre todos los pixeles de la imagen
-				fprintf(stderr,"\r%5.2f%%",100.*y/(h-1));
-				for(int x = 0; x < w; x++ ) {
-					int idx = (h - y - 1) * w + x; // index en 1D para una imagen 2D x,y son invertidos
-					Color pixelValue = Color(); // pixelValue en negro por ahora
-					// para el pixel actual, computar la dirección que un rayo debe tener
-					Vector cameraRayDir = cx * ( double(x)/w - .5) + cy * ( double(y)/h - .5) + camera.d;
-					
-					// computar el color del pixel para el punto que intersectó el rayo desde la camara
-					pixelValue = shadeH( Ray(camera.o, cameraRayDir.normalize()), muestreos );
-
-					// limitar los tres valores de color del pixel a [0,1]
-					pixelColors[idx] = Color(clamp(pixelValue.x), clamp(pixelValue.y), clamp(pixelValue.z));
-				}
-			}
-		}break;
-		
-		case 3:{
-			// Obtener el tiempo de inicio
-    		clock_t inicio = clock();
-			#pragma omp parallel for
-			for(int y = 0; y < h; y++) { 
-				// recorre todos los pixeles de la imagen
-				fprintf(stderr,"\r%5.2f%%",100.*y/(h-1));
-				for(int x = 0; x < w; x++ ) {
-					int idx = (h - y - 1) * w + x; // index en 1D para una imagen 2D x,y son invertidos
-					Color pixelValue = Color(); // pixelValue en negro por ahora
-					// para el pixel actual, computar la dirección que un rayo debe tener
-					Vector cameraRayDir = cx * ( double(x)/w - .5) + cy * ( double(y)/h - .5) + camera.d;
-					
-					// computar el color del pixel para el punto que intersectó el rayo desde la camara
-					pixelValue = shadeC( Ray(camera.o, cameraRayDir.normalize()), muestreos );
-
-					// limitar los tres valores de color del pixel a [0,1]
-					pixelColors[idx] = Color(clamp(pixelValue.x), clamp(pixelValue.y), clamp(pixelValue.z));
-				}
-			}
-		}break;
-
-		case 4: { // Fuente de ángulo sólido
+		case 2: { // Fuente de ángulo sólido
 			#pragma omp parallel for
 			for (int y = 0; y < h; y++) { 
 				fprintf(stderr, "\r%5.2f%%", 100. * y / (h - 1));

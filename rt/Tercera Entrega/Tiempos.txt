@@ -1,0 +1,11 @@
+El porgrama se compilo con el comando: g++ -O2 rt5.cpp
+
+
+Fuente_area_32          ->  5.7656 seg
+Fuente_area_100          ->  16.936 seg
+Fuente_area_1000          ->  161.218 seg
+
+Angulo_Solido_32          ->  8.457 seg
+Angulo_Solido_100          ->  25.114 seg
+Angulo_Solido_1000          ->  241.219 seg
+

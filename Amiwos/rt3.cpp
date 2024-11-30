@@ -414,33 +414,41 @@ Color monteCarloCosenoHemisferico(const Ray &r, int muestreos)
 /*MODIFICACIONEEEEEEEEEEEEEEEEEEEEEEEES INICIO*/ 
 
 
-class AreaLight {
+class FuenteArea {
 public:
-    Point center;    // Centro de la fuente
-    Vector u, v;     // Vectores para definir el área (dimensiones y orientación)
+    Point centro;    // Centro de la fuente
+    Vector u, v;     // Vectores para definir el área (dimensiones y orientación, solo si es necesario)
     Color emLuz;     // Radiancia emitida por la fuente
+    double radio;    // Radio del disco
 
-    AreaLight(Point c_, Vector u_, Vector v_, Color L_) 
-        : center(c_), u(u_), v(v_), emLuz(L_) {}
+    FuenteArea(Point c_, double radio_, Color L_) 
+        : centro(c_), radio(radio_), emLuz(L_) {}
 
-    // Genera un punto aleatorio dentro de la fuente de área
+    // Genera un punto aleatorio dentro del disco
     Point randomPoint() const {
-        double randU = (rand() / (double)RAND_MAX - 0.5) * 2.0;
-        double randV = (rand() / (double)RAND_MAX - 0.5) * 2.0;
-        return center + u * randU + v * randV;
+        // Genera un ángulo aleatorio en [0, 2*pi]
+        double angulo = 2 * M_PI * (rand() / (double)RAND_MAX);
+        
+        // Genera una distancia aleatoria dentro del radio (rango [0, radio])
+        double distancia = sqrt(rand() / (double)RAND_MAX) * radio; 
+
+        // Coordenadas polares a cartesianas para el punto en el disco
+        double x = centro.x + distancia * cos(angulo);
+        double z = centro.z + distancia * sin(angulo);
+
+        // El disco está alineado con el plano XZ, por lo que la coordenada Y permanece constante
+        return Point(x, centro.y, z);
     }
 };
 
-// Instancia de fuente de área en lugar de la esfera luminosa
-AreaLight areaLight(
-    Point(0, 23.4, 0),                // Mantener la posición de la fuente
-    Vector(15.0, 0, 0),             // Dimensión en X
-    Vector(0, 0, 15.0),             // Dimensión en Z
-    Color(15, 15, 15)                  // Rradiancia
+// Instancia de fuente de área en lugar de la esfera luminosa (ahora un disco)
+FuenteArea fuenteLuminosa(
+    Point(0, 23.4, 0),    // Centro del disco
+    60.0,                 // Radio del disco
+    Color(10, 10, 10)     // Radiancia
 );
 
 
-// Modificación del cálculo de iluminación
 Color monteCarloArea(const Ray &r, int muestreos) {
     double t;
     int id = 0;
@@ -457,9 +465,8 @@ Color monteCarloArea(const Ray &r, int muestreos) {
     // BRDF simplificada
     Vector brdf = obj.c * (1.0 / M_PI);
 
-    // Muestreo de la fuente de área
     for (int i = 0; i < muestreos; i++) {
-        Point lightPoint = areaLight.randomPoint(); // Punto aleatorio en la fuente
+        Point lightPoint = fuenteLuminosa.randomPoint(); // Punto aleatorio en el disco
         Vector dir_to_light = (lightPoint - x).normalize();
 
         double cos_theta = n.dot(dir_to_light);
@@ -471,13 +478,14 @@ Color monteCarloArea(const Ray &r, int muestreos) {
 
         // Verificar si el rayo alcanza la fuente sin obstrucciones
         if (!intersect(shadowRay, t2, id2) || id2 == 7) { // Asegurarse de que los rayos lleguen correctamente
-            radiancia = radiancia + (areaLight.emLuz.mult(brdf) * cos_theta);
+            radiancia = radiancia + (fuenteLuminosa.emLuz.mult(brdf) * cos_theta);
         }
     }
 
     // Normalización de la radiancia acumulada con un factor de atenuación
-    return radiancia * (1.0 / muestreos) * 0.1; // Atenuar la radiancia para reducir el brillo
+    return radiancia * (1.0 / muestreos) * 0.4; 
 }
+
 
 
 
